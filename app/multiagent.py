@@ -7,11 +7,34 @@ from langchain.tools import tool
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
+import tiktoken
 
-load_dotenv()
+load_dotenv()  # the .env file must include GROQ_API_KEY=... and TAVILY_API_KEY=...
 
+# Original version: this example used llama3-70b-8192 (or mixtral-8x7b-32768).
+# Groq has since retired both models, and Llama is now offered only to
+# enterprise customers. Today we use OpenAI's open-weight gpt-oss models,
+# which work with the same free Groq API key.
+# Groq retires models often: if you see "model decommissioned" or
+# "model not found", check https://console.groq.com/docs/models
+# and pick a model marked "Production".
+MODEL = "openai/gpt-oss-20b"  # or "openai/gpt-oss-120b", the most powerful one
+
+# CrewAI counts the tokens of each request with the tiktoken library.
+# The model name contains "gpt", so CrewAI asks tiktoken for its encoding,
+# and this version of tiktoken does not know it: it would print a warning
+# ("Could not automatically map openai/gpt-oss-20b to a tokeniser") on
+# every call. We tell it to use cl100k_base, an encoding this version
+# includes. It is only used to estimate tokens; nothing sent to Groq changes.
+tiktoken.model.MODEL_TO_ENCODING[MODEL] = "cl100k_base"
+
+# gpt-oss models reason before they answer. With the default effort,
+# gpt-oss-20b can spend its tokens thinking and return an empty answer.
+# Low reasoning effort leaves room for the answer itself. It goes through
+# extra_body because this version of langchain-groq predates that option.
 llm = ChatGroq(
-    model="llama3-70b-8192"
+    model=MODEL,
+    model_kwargs={"extra_body": {"reasoning_effort": "low"}}
 )
 
 @tool("process_search_tool", return_direct=False)
